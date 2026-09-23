@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CIS AWS Foundations Benchmark Report</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 2rem; color: #1a1a1a; }
+  h1 { font-size: 1.4rem; }
+  .meta { color: #666; margin-bottom: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2e2e2; font-size: 0.9rem; }
+  th { background: #f5f5f5; }
+  .PASS { color: #157f3c; font-weight: 600; }
+  .FAIL { color: #b3261e; font-weight: 600; }
+  .ERROR { color: #a06c00; font-weight: 600; }
+  .summary { margin-bottom: 1rem; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<h1>CIS AWS Foundations Benchmark Report</h1>
+<div class="meta">Generated 2026-09-23T07:27:39.179104+00:00</div>
+<div class="summary">5 passed &middot; 3 failed &middot; 0 errored (8 checks)</div>
+<table>
+<tr><th>Control</th><th>Status</th><th>Description</th><th>Resource</th><th>Remediation</th><th>Error</th></tr>
+<tr><td>1.5</td><td class="FAIL">FAIL</td><td>Root account has MFA enabled</td><td>root</td><td>Enable a virtual or hardware MFA device on the root account.</td><td></td></tr>
+<tr><td>1.4</td><td class="PASS">PASS</td><td>No active access keys for the root account</td><td>root</td><td>Delete any root account access keys; use IAM users/roles instead.</td><td></td></tr>
+<tr><td>1.8</td><td class="PASS">PASS</td><td>Password policy requires a minimum length of 14 characters</td><td>account</td><td>Set minimum password length to at least 14.</td><td></td></tr>
+<tr><td>1.9</td><td class="FAIL">FAIL</td><td>Password policy prevents reuse of the last 24 passwords</td><td>account</td><td>Set password reuse prevention to 24 or more.</td><td></td></tr>
+<tr><td>1.10</td><td class="PASS">PASS</td><td>IAM user &#x27;alice&#x27; has MFA enabled if console access is enabled</td><td>alice</td><td>Attach an MFA device to &#x27;alice&#x27; or remove console access.</td><td></td></tr>
+<tr><td>1.10</td><td class="FAIL">FAIL</td><td>IAM user &#x27;bob&#x27; has MFA enabled if console access is enabled</td><td>bob</td><td>Attach an MFA device to &#x27;bob&#x27; or remove console access.</td><td></td></tr>
+<tr><td>1.10</td><td class="PASS">PASS</td><td>IAM user &#x27;ci-deploy&#x27; has MFA enabled if console access is enabled</td><td>ci-deploy</td><td>Attach an MFA device to &#x27;ci-deploy&#x27; or remove console access.</td><td></td></tr>
+<tr><td>1.12</td><td class="PASS">PASS</td><td>Access key AKIARZPUZDIKGFQ7SJ3F for &#x27;ci-deploy&#x27; used within 45 days</td><td>ci-deploy/AKIARZPUZDIKGFQ7SJ3F</td><td>Rotate or deactivate access key AKIARZPUZDIKGFQ7SJ3F for &#x27;ci-deploy&#x27;.</td><td></td></tr>
+</table>
+</body>
+</html>

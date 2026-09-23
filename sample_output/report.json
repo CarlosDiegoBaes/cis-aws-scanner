@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-09-23T07:27:39.178610+00:00",
+  "summary": {
+    "PASS": 5,
+    "FAIL": 3,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "control_id": "1.5",
+      "description": "Root account has MFA enabled",
+      "status": "FAIL",
+      "resource": "root",
+      "remediation": "Enable a virtual or hardware MFA device on the root account.",
+      "error": "",
+      "evidence": ""
+    },
+    {
+      "control_id": "1.4",
+      "description": "No active access keys for the root account",
+      "status": "PASS",
+      "resource": "root",
+      "remediation": "Delete any root account access keys; use IAM users/roles instead.",
+      "error": "",
+      "evidence": ""
+    },
+    {
+      "control_id": "1.8",
+      "description": "Password policy requires a minimum length of 14 characters",
+      "status": "PASS",
+      "resource": "account",
+      "remediation": "Set minimum password length to at least 14.",
+      "error": "",
+      "evidence": "MinimumPasswordLength=14"
+    },
+    {
+      "control_id": "1.9",
+      "description": "Password policy prevents reuse of the last 24 passwords",
+      "status": "FAIL",
+      "resource": "account",
+      "remediation": "Set password reuse prevention to 24 or more.",
+      "error": "",
+      "evidence": "PasswordReusePrevention=5"
+    },
+    {
+      "control_id": "1.10",
+      "description": "IAM user 'alice' has MFA enabled if console access is enabled",
+      "status": "PASS",
+      "resource": "alice",
+      "remediation": "Attach an MFA device to 'alice' or remove console access.",
+      "error": "",
+      "evidence": "mfa_device_count=1"
+    },
+    {
+      "control_id": "1.10",
+      "description": "IAM user 'bob' has MFA enabled if console access is enabled",
+      "status": "FAIL",
+      "resource": "bob",
+      "remediation": "Attach an MFA device to 'bob' or remove console access.",
+      "error": "",
+      "evidence": "mfa_device_count=0"
+    },
+    {
+      "control_id": "1.10",
+      "description": "IAM user 'ci-deploy' has MFA enabled if console access is enabled",
+      "status": "PASS",
+      "resource": "ci-deploy",
+      "remediation": "Attach an MFA device to 'ci-deploy' or remove console access.",
+      "error": "",
+      "evidence": "no login profile"
+    },
+    {
+      "control_id": "1.12",
+      "description": "Access key AKIARZPUZDIKGFQ7SJ3F for 'ci-deploy' used within 45 days",
+      "status": "PASS",
+      "resource": "ci-deploy/AKIARZPUZDIKGFQ7SJ3F",
+      "remediation": "Rotate or deactivate access key AKIARZPUZDIKGFQ7SJ3F for 'ci-deploy'.",
+      "error": "",
+      "evidence": "never used; created 0 day(s) ago"
+    }
+  ]
+}

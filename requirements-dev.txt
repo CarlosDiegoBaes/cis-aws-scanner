@@ -1,0 +1,3 @@
+-r requirements.txt
+pytest>=8.0
+moto[iam]>=5.0
