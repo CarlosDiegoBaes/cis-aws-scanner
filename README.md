@@ -13,10 +13,6 @@ security side: it doesn't do anything offensive, it just evaluates
 account configuration against known-good controls and tells you what's
 out of compliance and how to fix it.
 
-> Replace `YOUR_USERNAME` in the badge URL above with your actual GitHub
-> username once you push this — otherwise the badge just shows "no
-> status."
-
 ## Sample output
 
 Run against a mocked account with a realistic mix of compliant and
