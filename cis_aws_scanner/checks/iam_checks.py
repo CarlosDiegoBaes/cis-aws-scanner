@@ -365,11 +365,11 @@ class IAMChecker(object):
                 # be used yet.
                 create_date: datetime = key["CreateDate"]
                 age_days: int = (now - create_date).days
-                status = CheckStatus.PASS if age_days <= max_unused_days else CheckStatus.FAIL
+                status = CheckStatus.PASS if age_days < max_unused_days else CheckStatus.FAIL
                 evidence = f"never used; created {age_days} day(s) ago"
             else:
                 age_days = (now - last_used_date).days
-                status = CheckStatus.PASS if age_days <= max_unused_days else CheckStatus.FAIL
+                status = CheckStatus.PASS if age_days < max_unused_days else CheckStatus.FAIL
                 evidence = f"last used {age_days} day(s) ago"
 
             results.append(
