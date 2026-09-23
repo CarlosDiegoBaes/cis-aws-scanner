@@ -265,6 +265,26 @@ def test_key_used_within_threshold_passes() -> None:
     assert results[0].status == CheckStatus.PASS
 
 
+def test_key_used_at_threshold_fails() -> None:
+    """
+    A key last used exactly 45 days ago meets the CIS "45 days or
+    greater" threshold and should therefore FAIL.
+    """
+    checker, mock_client = _checker_with_mocked_client()
+    now: datetime = datetime.now(timezone.utc)
+    mock_client.list_access_keys.return_value = {
+        "AccessKeyMetadata": [_access_key("AKIA_THRESHOLD", "Active", now - timedelta(days=200))]
+    }
+    mock_client.get_access_key_last_used.return_value = {
+        "AccessKeyLastUsed": {"LastUsedDate": now - timedelta(days=45)}
+    }
+
+    results = checker._evaluate_user_access_keys("bob", UNUSED_CREDENTIALS_THRESHOLD_DAYS)
+
+    assert len(results) == 1
+    assert results[0].status == CheckStatus.FAIL
+
+
 def test_key_used_outside_threshold_fails() -> None:
     """
     A key last used 46 days ago (past the 45-day CIS threshold) should
