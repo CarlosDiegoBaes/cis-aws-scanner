@@ -24,7 +24,8 @@ def build_sample_account() -> boto3.Session:
     Returns:
         boto3.Session: A mocked session with a partially-compliant IAM
             configuration: a decent password policy, one user with MFA,
-            one user without, and an old unused access key.
+            one user without, one new unused active access key, and one
+            inactive access key.
     """
     session: boto3.Session = boto3.Session(region_name="us-east-1")
     iam_client = session.client("iam")
