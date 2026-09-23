@@ -38,7 +38,7 @@ _HTML_TEMPLATE: Final = """<!DOCTYPE html>
 <div class="meta">Generated {generated_at}</div>
 <div class="summary">{pass_count} passed &middot; {fail_count} failed &middot; {error_count} errored ({total} checks)</div>
 <table>
-<tr><th>Control</th><th>Status</th><th>Description</th><th>Resource</th><th>Remediation</th><th>Error</th></tr>
+<tr><th>Control</th><th>Status</th><th>Description</th><th>Resource</th><th>Evidence</th><th>Remediation</th><th>Error</th></tr>
 {rows}
 </table>
 </body>
@@ -146,6 +146,7 @@ class ReportGenerator(object):
                 f'<td class="{escape(result.status.value)}">{escape(result.status.value)}</td>'
                 f"<td>{escape(result.description)}</td>"
                 f"<td>{escape(result.resource)}</td>"
+                f"<td>{escape(result.evidence)}</td>"
                 f"<td>{escape(result.remediation)}</td>"
                 f"<td>{escape(result.error)}</td>"
                 "</tr>"
