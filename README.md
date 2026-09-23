@@ -1,6 +1,6 @@
 # CIS AWS Foundations Benchmark Scanner
 
-[![tests](https://github.com/YOUR_USERNAME/cis-aws-scanner/actions/workflows/tests.yml/badge.svg)](https://github.com/YOUR_USERNAME/cis-aws-scanner/actions/workflows/tests.yml)
+[![tests](https://github.com/CarlosDiegoBaes/cis-aws-scanner/actions/workflows/tests.yml/badge.svg)](https://github.com/CarlosDiegoBaes/cis-aws-scanner/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](requirements.txt)
 
