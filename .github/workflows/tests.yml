@@ -4,10 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
-  pytest:
+  lint-and-test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -19,10 +18,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Run tests
+      - name: Ruff
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Pytest
         run: pytest -v

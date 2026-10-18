@@ -1,117 +1,86 @@
-"""
-scanner.py
+"""Run a set of checks against one boto3 session.
 
-Command-line entry point for the CIS AWS Foundations Benchmark scanner.
-Runs the enabled check modules against an AWS account and writes a
-report.
+:class:`Scanner` is composition, not inheritance. It *has* a session
+and a list of checks. It is not a special kind of check.
 """
 
 from __future__ import annotations
 
-import argparse
-from pathlib import Path
-from typing import Final
+from collections.abc import Sequence
 
-import boto3
+from boto3.session import Session
 
-from cis_aws_scanner.checks.iam_checks import IAMChecker
-from cis_aws_scanner.models import CheckResult
-from cis_aws_scanner.report import ReportGenerator
-
-DEFAULT_OUTPUT_DIR: Final = "sample_output"
+from cis_aws_scanner.check import Check
+from cis_aws_scanner.models import Finding, ScanReport, Status
+from cis_aws_scanner.registry import load_checks
+from cis_aws_scanner.scoring import summarize
 
 
-class Scanner(object):
-    """
-    Orchestrates CIS AWS Foundations Benchmark checks across all enabled
-    check modules.
+class Scanner:
+    """Compose a boto3 session with the checks it should run.
 
-    Attributes:
-        _session (boto3.Session): private. The AWS session used for all
-            checks.
-        _profile (str): private. The AWS CLI profile name in use, for
-            display purposes.
+    Pass ``checks`` in tests when you want a fake check. Leave it empty
+    in the CLI and the scanner loads the registered checks, optionally
+    filtered by ``services``.
     """
 
-    def __init__(self, profile: str | None = None, region: str | None = None) -> None:
-        """
-        Non-default constructor. Initializes a Scanner instance.
-
-        Parameters:
-            profile (str | None): AWS CLI profile to use. Defaults to
-                the default profile.
-            region (str | None): AWS region to use. Defaults to the
-                profile's configured region.
-        """
-        self._session: boto3.Session = boto3.Session(profile_name=profile, region_name=region)
-        self._profile: str = profile if profile is not None else "default"
+    def __init__(
+        self,
+        session: Session,
+        checks: Sequence[Check] | None = None,
+        profile: str = "default",
+        region: str = "us-east-1",
+        services: Sequence[str] | None = None,
+    ) -> None:
+        self._session = session
+        self._profile = profile
+        self._region = region
+        if checks is None:
+            self._checks = load_checks().create(services)
+        else:
+            self._checks = list(checks)
 
     @property
     def profile(self) -> str:
-        """
-        Get the AWS CLI profile name in use.
-        """
+        """AWS profile name recorded on the report. Does not call AWS."""
         return self._profile
 
-    def run(self) -> list[CheckResult]:
-        """
-        Run all enabled check modules.
+    @property
+    def region(self) -> str:
+        """Region recorded on the report and used by the session."""
+        return self._region
 
-        Returns:
-            list[CheckResult]: The combined results of every check
-                module. Currently only IAM (CIS Section 1) is
-                implemented; S3, CloudTrail, and network checks are
-                planned next.
+    @property
+    def checks(self) -> list[Check]:
+        """The check instances this scanner will run, in order."""
+        return list(self._checks)
+
+    def run(self) -> ScanReport:
+        """Run every check and return a scored report.
+
+        An unexpected exception becomes one ERROR finding for that
+        check. The remaining checks still run.
         """
-        results: list[CheckResult] = []
-        iam_checker: IAMChecker = IAMChecker(session=self._session)
-        results.extend(iam_checker.run_all())
-        return results
+        findings: list[Finding] = []
+        for check in self._checks:
+            try:
+                findings.extend(check.run(self._session))
+            except Exception as exc:
+                findings.append(check.finding(Status.ERROR, error=str(exc)))
+        return ScanReport(
+            findings=findings,
+            profile=self._profile,
+            region=self._region,
+            summary=summarize(findings),
+        )
 
     def __str__(self) -> str:
-        """
-        Return a readable string representation of this scanner.
-        """
-        return f"Scanner(profile='{self._profile}')"
-
-
-def parse_args() -> argparse.Namespace:
-    """
-    Parse command-line arguments for the scanner.
-
-    Returns:
-        argparse.Namespace: The parsed arguments.
-    """
-    parser = argparse.ArgumentParser(description="CIS AWS Foundations Benchmark scanner")
-    parser.add_argument("--profile", type=str, default=None, help="AWS CLI profile to use")
-    parser.add_argument("--region", type=str, default=None, help="AWS region to use")
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        default=DEFAULT_OUTPUT_DIR,
-        help="Directory to write JSON/HTML reports to",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    """
-    Run the scanner end-to-end: execute checks, print a console
-    summary, and write JSON and HTML reports to disk.
-    """
-    args: argparse.Namespace = parse_args()
-    scanner: Scanner = Scanner(profile=args.profile, region=args.region)
-    results: list[CheckResult] = scanner.run()
-
-    report: ReportGenerator = ReportGenerator(results)
-    print(report.to_console())
-
-    output_dir: Path = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    report.to_json(output_dir / "report.json")
-    report.to_html(output_dir / "report.html")
-    print(f"\nJSON and HTML reports written to {output_dir}/")
+        return (
+            f"Scanner(profile={self._profile}, region={self._region}, checks={len(self._checks)})"
+        )
 
 
 if __name__ == "__main__":
-    main()
+    from cis_aws_scanner.cli import main
+
+    raise SystemExit(main())
