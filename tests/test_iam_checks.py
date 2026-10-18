@@ -1,326 +1,273 @@
-"""
-tests/test_iam_checks.py
+"""IAM checks. moto covers the API. A few age and error cases mock the client.
 
-Unit tests for IAMChecker. Most tests use moto to mock AWS IAM so they
-run without real AWS credentials, a real account, or network access.
-The access-key age tests instead mock the boto3 client directly with
-unittest.mock, since moto can't backdate CreateDate/LastUsedDate to
-exact day boundaries.
+moto cannot backdate CreateDate or LastUsedDate to an exact day, so the
+45-day boundary is tested with a fake client.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
-import boto3
 from botocore.exceptions import ClientError
-from moto import mock_aws
 
-from cis_aws_scanner.checks.iam_checks import IAMChecker, UNUSED_CREDENTIALS_THRESHOLD_DAYS
-from cis_aws_scanner.models import CheckStatus
-
-
-@mock_aws
-def test_root_mfa_check_fails_by_default() -> None:
-    """
-    A freshly mocked account has no root MFA device, so the check
-    should FAIL.
-    """
-    session: boto3.Session = boto3.Session(region_name="us-east-1")
-    checker: IAMChecker = IAMChecker(session=session)
-
-    result = checker.check_root_mfa_enabled()
-
-    assert result.status == CheckStatus.FAIL
-    assert result.control_id == "1.5"
+from cis_aws_scanner.checks.iam import (
+    UNUSED_KEY_DAYS,
+    AccessKeyAgeCheck,
+    ConsoleMfaCheck,
+    PasswordLengthCheck,
+    PasswordReuseCheck,
+    RootAccessKeyCheck,
+    RootMfaCheck,
+)
+from cis_aws_scanner.models import Status
 
 
-def test_root_mfa_check_reports_error_separately_from_remediation() -> None:
-    """
-    An AWS API failure (e.g. AccessDenied) should produce an ERROR
-    result whose `error` field holds the exception message, while
-    `remediation` keeps its static fix-it text rather than being
-    overwritten by the exception.
-    """
-    checker: IAMChecker = IAMChecker.__new__(IAMChecker)
-    checker._client = MagicMock()
-    checker._client.get_account_summary.side_effect = ClientError(
-        {"Error": {"Code": "AccessDenied", "Message": "not authorized"}},
-        "GetAccountSummary",
+def _session_for(client: MagicMock) -> MagicMock:
+    session = MagicMock()
+    session.client.return_value = client
+    return session
+
+
+def _client_error(code: str, operation: str) -> ClientError:
+    return ClientError({"Error": {"Code": code, "Message": "not authorized"}}, operation)
+
+
+def test_root_mfa_fails_on_a_fresh_account(session) -> None:
+    result = RootMfaCheck().run(session)[0]
+
+    assert result.status is Status.FAIL
+    assert result.check_id == "1.5"
+    assert result.cis_reference == "1.5"
+    assert "AccountMFAEnabled=0" in result.evidence
+
+
+def test_root_mfa_passes_when_the_summary_says_enabled() -> None:
+    client = MagicMock()
+    client.get_account_summary.return_value = {"SummaryMap": {"AccountMFAEnabled": 1}}
+
+    result = RootMfaCheck().run(_session_for(client))[0]
+
+    assert result.status is Status.PASS
+    assert result.evidence == "AccountMFAEnabled=1"
+
+
+def test_root_mfa_keeps_remediation_when_the_api_errors() -> None:
+    client = MagicMock()
+    client.get_account_summary.side_effect = _client_error("AccessDenied", "GetAccountSummary")
+
+    result = RootMfaCheck().run(_session_for(client))[0]
+
+    assert result.status is Status.ERROR
+    assert "AccessDenied" in result.error
+    assert result.remediation == "Enable a virtual or hardware MFA device on the root account."
+    assert result.error != result.remediation
+
+
+def test_root_access_keys_pass_on_a_fresh_account(session) -> None:
+    result = RootAccessKeyCheck().run(session)[0]
+
+    assert result.status is Status.PASS
+    assert result.check_id == "1.4"
+    assert result.evidence == "AccountAccessKeysPresent=0"
+
+
+def test_root_access_keys_fail_when_a_key_is_present() -> None:
+    client = MagicMock()
+    client.get_account_summary.return_value = {"SummaryMap": {"AccountAccessKeysPresent": 1}}
+
+    result = RootAccessKeyCheck().run(_session_for(client))[0]
+
+    assert result.status is Status.FAIL
+    assert result.severity.value == "CRITICAL"
+
+
+def test_password_policy_fails_both_controls_when_it_is_missing(session) -> None:
+    length = PasswordLengthCheck().run(session)[0]
+    reuse = PasswordReuseCheck().run(session)[0]
+
+    assert length.status is Status.FAIL
+    assert reuse.status is Status.FAIL
+    assert length.evidence == "no password policy configured"
+    assert {length.check_id, reuse.check_id} == {"1.8", "1.9"}
+
+
+def test_password_policy_can_pass_one_control_and_fail_the_other(session) -> None:
+    session.client("iam").update_account_password_policy(
+        MinimumPasswordLength=8,
+        PasswordReusePrevention=24,
     )
 
-    result = checker.check_root_mfa_enabled()
+    length = PasswordLengthCheck().run(session)[0]
+    reuse = PasswordReuseCheck().run(session)[0]
 
-    assert result.status == CheckStatus.ERROR
-    assert "AccessDenied" in result.error
-    assert "not authorized" in result.error
-    assert result.remediation == "Enable a virtual or hardware MFA device on the root account."
-
-
-@mock_aws
-def test_no_root_access_keys_passes_by_default() -> None:
-    """
-    A freshly mocked account has no root access keys, so the check
-    should PASS.
-    """
-    session: boto3.Session = boto3.Session(region_name="us-east-1")
-    checker: IAMChecker = IAMChecker(session=session)
-
-    result = checker.check_no_root_access_keys()
-
-    assert result.status == CheckStatus.PASS
-    assert result.control_id == "1.4"
+    assert length.status is Status.FAIL
+    assert length.evidence == "MinimumPasswordLength=8"
+    assert reuse.status is Status.PASS
+    assert reuse.evidence == "PasswordReusePrevention=24"
 
 
-@mock_aws
-def test_password_policy_fails_when_not_set() -> None:
-    """
-    An account with no password policy configured should fail both
-    CIS v3.0.0 password policy sub-checks (1.8, 1.9).
-    """
-    session: boto3.Session = boto3.Session(region_name="us-east-1")
-    checker: IAMChecker = IAMChecker(session=session)
-
-    results = checker.check_password_policy()
-
-    assert len(results) == 2
-    assert {result.control_id for result in results} == {"1.8", "1.9"}
-    assert all(result.status == CheckStatus.FAIL for result in results)
-
-
-@mock_aws
-def test_password_policy_passes_when_compliant() -> None:
-    """
-    A password policy meeting the CIS v3.0.0 thresholds (min length 14,
-    reuse prevention 24) should pass both sub-checks.
-    """
-    session: boto3.Session = boto3.Session(region_name="us-east-1")
-    iam_client = session.client("iam")
-    iam_client.update_account_password_policy(
+def test_password_policy_passes_when_both_thresholds_are_met(session) -> None:
+    session.client("iam").update_account_password_policy(
         MinimumPasswordLength=14,
         PasswordReusePrevention=24,
     )
-    checker: IAMChecker = IAMChecker(session=session)
 
-    results = checker.check_password_policy()
-
-    assert all(result.status == CheckStatus.PASS for result in results)
+    assert PasswordLengthCheck().run(session)[0].status is Status.PASS
+    assert PasswordReuseCheck().run(session)[0].status is Status.PASS
 
 
-@mock_aws
-def test_mfa_check_flags_user_with_console_access_and_no_mfa() -> None:
-    """
-    An IAM user with a login profile but no MFA device should FAIL.
-    """
-    session: boto3.Session = boto3.Session(region_name="us-east-1")
-    iam_client = session.client("iam")
-    iam_client.create_user(UserName="alice")
-    iam_client.create_login_profile(UserName="alice", Password="Sup3r$ecret!")
-    checker: IAMChecker = IAMChecker(session=session)
+def test_password_policy_api_error_stays_an_error() -> None:
+    client = MagicMock()
+    client.get_account_password_policy.side_effect = _client_error(
+        "AccessDenied", "GetAccountPasswordPolicy"
+    )
 
-    results = checker.check_mfa_for_console_users()
+    result = PasswordLengthCheck().run(_session_for(client))[0]
 
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.FAIL
-    assert results[0].control_id == "1.10"
-    assert results[0].resource == "alice"
+    assert result.status is Status.ERROR
+    assert "AccessDenied" in result.error
+    assert result.remediation.startswith("Set minimum password length")
 
 
-@mock_aws
-def test_mfa_check_passes_user_with_no_console_access() -> None:
-    """
-    An IAM user with no login profile (no console access) should PASS,
-    since MFA is not applicable.
-    """
-    session: boto3.Session = boto3.Session(region_name="us-east-1")
-    iam_client = session.client("iam")
-    iam_client.create_user(UserName="service-account")
-    checker: IAMChecker = IAMChecker(session=session)
+def test_console_user_without_mfa_fails(session) -> None:
+    iam = session.client("iam")
+    iam.create_user(UserName="alice")
+    iam.create_login_profile(UserName="alice", Password="Sup3r$ecret!23")
 
-    results = checker.check_mfa_for_console_users()
+    result = ConsoleMfaCheck().run(session)[0]
 
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.PASS
+    assert result.status is Status.FAIL
+    assert result.check_id == "1.10"
+    assert result.resource == "alice"
+    assert result.evidence == "mfa_device_count=0"
+    assert "alice" in result.remediation
 
 
-@mock_aws
-def test_run_all_returns_combined_results() -> None:
-    """
-    run_all() should combine every IAM sub-check into a single list.
-    """
-    session: boto3.Session = boto3.Session(region_name="us-east-1")
-    checker: IAMChecker = IAMChecker(session=session)
+def test_console_user_with_mfa_passes(session) -> None:
+    iam = session.client("iam")
+    iam.create_user(UserName="alice")
+    iam.create_login_profile(UserName="alice", Password="Sup3r$ecret!23")
+    device = iam.create_virtual_mfa_device(VirtualMFADeviceName="alice-mfa")
+    iam.enable_mfa_device(
+        UserName="alice",
+        SerialNumber=device["VirtualMFADevice"]["SerialNumber"],
+        AuthenticationCode1="123456",
+        AuthenticationCode2="123456",
+    )
 
-    results = checker.run_all()
+    result = ConsoleMfaCheck().run(session)[0]
 
-    # 1 (root MFA) + 1 (root keys) + 2 (password policy) = 4, plus zero
-    # per-user checks since no IAM users exist in a fresh mocked account.
-    assert len(results) == 4
-
-
-# --- CIS 1.12 (unused access keys): edge cases -----------------------------
-#
-# These use a mocked client rather than moto, so CreateDate / LastUsedDate
-# can be pinned to exact day boundaries around the 45-day CIS threshold.
+    assert result.status is Status.PASS
+    assert result.evidence == "mfa_device_count=1"
 
 
-def _checker_with_mocked_client() -> tuple[IAMChecker, MagicMock]:
-    """
-    Returns:
-        tuple[IAMChecker, MagicMock]: An IAMChecker built without a real
-            boto3 session, plus the MagicMock standing in for its IAM
-            client, so tests can script exact API responses.
-    """
-    checker: IAMChecker = IAMChecker.__new__(IAMChecker)
-    mock_client: MagicMock = MagicMock()
-    checker._client = mock_client
-    return checker, mock_client
+def test_user_without_a_login_profile_passes(session) -> None:
+    session.client("iam").create_user(UserName="service-account")
+
+    result = ConsoleMfaCheck().run(session)[0]
+
+    assert result.status is Status.PASS
+    assert result.evidence == "no login profile"
+
+
+def test_console_mfa_has_no_findings_when_there_are_no_users(session) -> None:
+    assert ConsoleMfaCheck().run(session) == []
 
 
 def _access_key(key_id: str, status: str, create_date: datetime) -> dict:
-    """
-    Parameters:
-        key_id (str): The access key ID.
-        status (str): "Active" or "Inactive".
-        create_date (datetime): When the key was created.
-
-    Returns:
-        dict: A single AccessKeyMetadata entry as list_access_keys
-            would return it.
-    """
     return {"AccessKeyId": key_id, "Status": status, "CreateDate": create_date}
 
 
+def _age_session(keys: list[dict], last_used: dict | None) -> tuple[MagicMock, MagicMock]:
+    client = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Users": [{"UserName": "bob"}]}]
+    client.get_paginator.return_value = paginator
+    client.list_access_keys.return_value = {"AccessKeyMetadata": keys}
+    if last_used is None:
+        client.get_access_key_last_used.return_value = {"AccessKeyLastUsed": {}}
+    else:
+        client.get_access_key_last_used.return_value = {"AccessKeyLastUsed": last_used}
+    return _session_for(client), client
+
+
 def test_new_never_used_key_passes() -> None:
-    """
-    A key created moments ago that has never been used should PASS: it
-    simply hasn't had time to be used yet, and shouldn't be judged the
-    same as a stale key.
-    """
-    checker, mock_client = _checker_with_mocked_client()
-    now: datetime = datetime.now(timezone.utc)
-    mock_client.list_access_keys.return_value = {
-        "AccessKeyMetadata": [_access_key("AKIA_NEW", "Active", now)]
-    }
-    mock_client.get_access_key_last_used.return_value = {"AccessKeyLastUsed": {}}
+    now = datetime.now(UTC)
+    session, _client = _age_session([_access_key("AKIA_NEW", "Active", now)], None)
 
-    results = checker._evaluate_user_access_keys("bob", UNUSED_CREDENTIALS_THRESHOLD_DAYS)
+    result = AccessKeyAgeCheck().run(session)[0]
 
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.PASS
+    assert result.status is Status.PASS
+    assert result.resource == "bob/AKIA_NEW"
+    assert result.evidence == "never used; created 0 day(s) ago"
 
 
 def test_old_never_used_key_fails() -> None:
-    """
-    A key created 100 days ago that has never been used should FAIL:
-    it's had ample time to be used and wasn't.
-    """
-    checker, mock_client = _checker_with_mocked_client()
-    old_create_date: datetime = datetime.now(timezone.utc) - timedelta(days=100)
-    mock_client.list_access_keys.return_value = {
-        "AccessKeyMetadata": [_access_key("AKIA_OLD_UNUSED", "Active", old_create_date)]
-    }
-    mock_client.get_access_key_last_used.return_value = {"AccessKeyLastUsed": {}}
+    created = datetime.now(UTC) - timedelta(days=100)
+    session, _client = _age_session([_access_key("AKIA_OLD", "Active", created)], None)
 
-    results = checker._evaluate_user_access_keys("bob", UNUSED_CREDENTIALS_THRESHOLD_DAYS)
+    result = AccessKeyAgeCheck().run(session)[0]
 
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.FAIL
+    assert result.status is Status.FAIL
+    assert "created 100 day(s) ago" in result.evidence
 
 
 def test_inactive_key_is_skipped() -> None:
-    """
-    An already-deactivated access key isn't a finding for this check,
-    so it should produce no result at all (not a PASS, not a FAIL).
-    """
-    checker, mock_client = _checker_with_mocked_client()
-    mock_client.list_access_keys.return_value = {
-        "AccessKeyMetadata": [_access_key("AKIA_INACTIVE", "Inactive", datetime.now(timezone.utc))]
-    }
-
-    results = checker._evaluate_user_access_keys("bob", UNUSED_CREDENTIALS_THRESHOLD_DAYS)
-
-    assert results == []
-    mock_client.get_access_key_last_used.assert_not_called()
-
-
-def test_key_used_within_threshold_passes() -> None:
-    """
-    A key last used 44 days ago (inside the 45-day CIS threshold)
-    should PASS.
-    """
-    checker, mock_client = _checker_with_mocked_client()
-    now: datetime = datetime.now(timezone.utc)
-    mock_client.list_access_keys.return_value = {
-        "AccessKeyMetadata": [_access_key("AKIA_RECENT", "Active", now - timedelta(days=200))]
-    }
-    mock_client.get_access_key_last_used.return_value = {
-        "AccessKeyLastUsed": {"LastUsedDate": now - timedelta(days=44)}
-    }
-
-    results = checker._evaluate_user_access_keys("bob", UNUSED_CREDENTIALS_THRESHOLD_DAYS)
-
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.PASS
-
-
-def test_key_used_at_threshold_fails() -> None:
-    """
-    A key last used exactly 45 days ago meets the CIS "45 days or
-    greater" threshold and should therefore FAIL.
-    """
-    checker, mock_client = _checker_with_mocked_client()
-    now: datetime = datetime.now(timezone.utc)
-    mock_client.list_access_keys.return_value = {
-        "AccessKeyMetadata": [_access_key("AKIA_THRESHOLD", "Active", now - timedelta(days=200))]
-    }
-    mock_client.get_access_key_last_used.return_value = {
-        "AccessKeyLastUsed": {"LastUsedDate": now - timedelta(days=45)}
-    }
-
-    results = checker._evaluate_user_access_keys("bob", UNUSED_CREDENTIALS_THRESHOLD_DAYS)
-
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.FAIL
-
-
-def test_key_used_outside_threshold_fails() -> None:
-    """
-    A key last used 46 days ago (past the 45-day CIS threshold) should
-    FAIL.
-    """
-    checker, mock_client = _checker_with_mocked_client()
-    now: datetime = datetime.now(timezone.utc)
-    mock_client.list_access_keys.return_value = {
-        "AccessKeyMetadata": [_access_key("AKIA_STALE", "Active", now - timedelta(days=200))]
-    }
-    mock_client.get_access_key_last_used.return_value = {
-        "AccessKeyLastUsed": {"LastUsedDate": now - timedelta(days=46)}
-    }
-
-    results = checker._evaluate_user_access_keys("bob", UNUSED_CREDENTIALS_THRESHOLD_DAYS)
-
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.FAIL
-
-
-def test_unused_access_keys_reports_error_on_access_denied() -> None:
-    """
-    An AccessDenied error while listing users should surface as a
-    single ERROR result with the exception detail in `error`, not
-    `remediation`.
-    """
-    checker, mock_client = _checker_with_mocked_client()
-    paginator = MagicMock()
-    paginator.paginate.side_effect = ClientError(
-        {"Error": {"Code": "AccessDenied", "Message": "not authorized"}}, "ListUsers"
+    session, client = _age_session(
+        [_access_key("AKIA_INACTIVE", "Inactive", datetime.now(UTC))],
+        None,
     )
-    mock_client.get_paginator.return_value = paginator
 
-    results = checker.check_unused_access_keys()
+    assert AccessKeyAgeCheck().run(session) == []
+    client.get_access_key_last_used.assert_not_called()
 
-    assert len(results) == 1
-    assert results[0].status == CheckStatus.ERROR
-    assert "AccessDenied" in results[0].error
-    assert results[0].remediation != results[0].error
+
+def test_key_used_inside_the_window_passes() -> None:
+    now = datetime.now(UTC)
+    session, _client = _age_session(
+        [_access_key("AKIA_RECENT", "Active", now - timedelta(days=200))],
+        {"LastUsedDate": now - timedelta(days=44)},
+    )
+
+    result = AccessKeyAgeCheck().run(session)[0]
+
+    assert result.status is Status.PASS
+    assert result.evidence == "last used 44 day(s) ago"
+    assert UNUSED_KEY_DAYS == 45
+
+
+def test_key_used_at_the_45_day_threshold_fails() -> None:
+    now = datetime.now(UTC)
+    session, _client = _age_session(
+        [_access_key("AKIA_THRESHOLD", "Active", now - timedelta(days=200))],
+        {"LastUsedDate": now - timedelta(days=45)},
+    )
+
+    result = AccessKeyAgeCheck().run(session)[0]
+
+    assert result.status is Status.FAIL
+    assert result.evidence == "last used 45 day(s) ago"
+
+
+def test_key_used_outside_the_window_fails() -> None:
+    now = datetime.now(UTC)
+    session, _client = _age_session(
+        [_access_key("AKIA_STALE", "Active", now - timedelta(days=200))],
+        {"LastUsedDate": now - timedelta(days=46)},
+    )
+
+    assert AccessKeyAgeCheck().run(session)[0].status is Status.FAIL
+
+
+def test_unused_keys_report_an_error_when_listing_users_is_denied() -> None:
+    client = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.side_effect = _client_error("AccessDenied", "ListUsers")
+    client.get_paginator.return_value = paginator
+
+    result = AccessKeyAgeCheck().run(_session_for(client))[0]
+
+    assert result.status is Status.ERROR
+    assert "AccessDenied" in result.error
+    assert result.remediation != result.error

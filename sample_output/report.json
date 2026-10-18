@@ -1,82 +1,239 @@
 {
-  "generated_at": "2026-09-23T07:27:39.178610+00:00",
+  "generated_at": "2026-10-18T05:49:13.682350+00:00",
+  "profile": "sample",
+  "region": "us-east-1",
   "summary": {
-    "PASS": 5,
-    "FAIL": 3,
-    "ERROR": 0
+    "passed": 9,
+    "failed": 8,
+    "errored": 0,
+    "score": 53,
+    "by_severity": {
+      "CRITICAL": {
+        "passed": 1,
+        "failed": 1,
+        "errored": 0
+      },
+      "HIGH": {
+        "passed": 5,
+        "failed": 4,
+        "errored": 0
+      },
+      "MEDIUM": {
+        "passed": 3,
+        "failed": 3,
+        "errored": 0
+      },
+      "LOW": {
+        "passed": 0,
+        "failed": 0,
+        "errored": 0
+      }
+    }
   },
-  "results": [
+  "findings": [
     {
-      "control_id": "1.5",
-      "description": "Root account has MFA enabled",
-      "status": "FAIL",
+      "check_id": "1.4",
+      "title": "No access keys for the root account",
+      "cis_reference": "1.4",
+      "severity": "CRITICAL",
+      "status": "PASS",
+      "service": "iam",
       "resource": "root",
+      "evidence": "AccountAccessKeysPresent=0",
+      "remediation": "Delete any root account access keys. Use IAM users or roles instead.",
+      "error": ""
+    },
+    {
+      "check_id": "1.5",
+      "title": "Root account has MFA enabled",
+      "cis_reference": "1.5",
+      "severity": "CRITICAL",
+      "status": "FAIL",
+      "service": "iam",
+      "resource": "root",
+      "evidence": "AccountMFAEnabled=0",
       "remediation": "Enable a virtual or hardware MFA device on the root account.",
-      "error": "",
-      "evidence": ""
+      "error": ""
     },
     {
-      "control_id": "1.4",
-      "description": "No active access keys for the root account",
+      "check_id": "1.8",
+      "title": "Password policy requires a minimum length of 14 characters",
+      "cis_reference": "1.8",
+      "severity": "MEDIUM",
       "status": "PASS",
-      "resource": "root",
-      "remediation": "Delete any root account access keys; use IAM users/roles instead.",
-      "error": "",
-      "evidence": ""
-    },
-    {
-      "control_id": "1.8",
-      "description": "Password policy requires a minimum length of 14 characters",
-      "status": "PASS",
+      "service": "iam",
       "resource": "account",
+      "evidence": "MinimumPasswordLength=14",
       "remediation": "Set minimum password length to at least 14.",
-      "error": "",
-      "evidence": "MinimumPasswordLength=14"
+      "error": ""
     },
     {
-      "control_id": "1.9",
-      "description": "Password policy prevents reuse of the last 24 passwords",
+      "check_id": "1.9",
+      "title": "Password policy prevents reuse of the last 24 passwords",
+      "cis_reference": "1.9",
+      "severity": "MEDIUM",
       "status": "FAIL",
+      "service": "iam",
       "resource": "account",
+      "evidence": "PasswordReusePrevention=5",
       "remediation": "Set password reuse prevention to 24 or more.",
-      "error": "",
-      "evidence": "PasswordReusePrevention=5"
+      "error": ""
     },
     {
-      "control_id": "1.10",
-      "description": "IAM user 'alice' has MFA enabled if console access is enabled",
+      "check_id": "1.10",
+      "title": "MFA is enabled for IAM users with console access",
+      "cis_reference": "1.10",
+      "severity": "HIGH",
       "status": "PASS",
+      "service": "iam",
       "resource": "alice",
+      "evidence": "mfa_device_count=1",
       "remediation": "Attach an MFA device to 'alice' or remove console access.",
-      "error": "",
-      "evidence": "mfa_device_count=1"
+      "error": ""
     },
     {
-      "control_id": "1.10",
-      "description": "IAM user 'bob' has MFA enabled if console access is enabled",
+      "check_id": "1.10",
+      "title": "MFA is enabled for IAM users with console access",
+      "cis_reference": "1.10",
+      "severity": "HIGH",
       "status": "FAIL",
+      "service": "iam",
       "resource": "bob",
+      "evidence": "mfa_device_count=0",
       "remediation": "Attach an MFA device to 'bob' or remove console access.",
-      "error": "",
-      "evidence": "mfa_device_count=0"
+      "error": ""
     },
     {
-      "control_id": "1.10",
-      "description": "IAM user 'ci-deploy' has MFA enabled if console access is enabled",
+      "check_id": "1.10",
+      "title": "MFA is enabled for IAM users with console access",
+      "cis_reference": "1.10",
+      "severity": "HIGH",
       "status": "PASS",
+      "service": "iam",
       "resource": "ci-deploy",
+      "evidence": "no login profile",
       "remediation": "Attach an MFA device to 'ci-deploy' or remove console access.",
-      "error": "",
-      "evidence": "no login profile"
+      "error": ""
     },
     {
-      "control_id": "1.12",
-      "description": "Access key AKIARZPUZDIKGFQ7SJ3F for 'ci-deploy' used within 45 days",
+      "check_id": "1.12",
+      "title": "Active access keys are used within 45 days",
+      "cis_reference": "1.12",
+      "severity": "MEDIUM",
       "status": "PASS",
-      "resource": "ci-deploy/AKIARZPUZDIKGFQ7SJ3F",
-      "remediation": "Rotate or deactivate access key AKIARZPUZDIKGFQ7SJ3F for 'ci-deploy'.",
-      "error": "",
-      "evidence": "never used; created 0 day(s) ago"
+      "service": "iam",
+      "resource": "ci-deploy/AKIARZPUZDIKAHEVREZS",
+      "evidence": "never used; created 0 day(s) ago",
+      "remediation": "Rotate or deactivate access key AKIARZPUZDIKAHEVREZS for 'ci-deploy'.",
+      "error": ""
+    },
+    {
+      "check_id": "2.1.4",
+      "title": "S3 buckets block public access",
+      "cis_reference": "2.1.4",
+      "severity": "HIGH",
+      "status": "PASS",
+      "service": "s3",
+      "resource": "logs-locked",
+      "evidence": "all four flags enabled",
+      "remediation": "Turn on BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, and RestrictPublicBuckets for the bucket.",
+      "error": ""
+    },
+    {
+      "check_id": "2.1.4",
+      "title": "S3 buckets block public access",
+      "cis_reference": "2.1.4",
+      "severity": "HIGH",
+      "status": "FAIL",
+      "service": "s3",
+      "resource": "public-data",
+      "evidence": "no public access block configuration",
+      "remediation": "Turn on BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, and RestrictPublicBuckets for the bucket.",
+      "error": ""
+    },
+    {
+      "check_id": "s3-encryption",
+      "title": "S3 buckets have default encryption configured",
+      "cis_reference": "best practice (no v3.0.0 id)",
+      "severity": "MEDIUM",
+      "status": "PASS",
+      "service": "s3",
+      "resource": "logs-locked",
+      "evidence": "SSEAlgorithm=AES256",
+      "remediation": "Set a default encryption rule on the bucket (SSE-S3 or SSE-KMS). This check is a best practice; CIS v3.0.0 does not number it.",
+      "error": ""
+    },
+    {
+      "check_id": "s3-encryption",
+      "title": "S3 buckets have default encryption configured",
+      "cis_reference": "best practice (no v3.0.0 id)",
+      "severity": "MEDIUM",
+      "status": "FAIL",
+      "service": "s3",
+      "resource": "public-data",
+      "evidence": "no default encryption configuration",
+      "remediation": "Set a default encryption rule on the bucket (SSE-S3 or SSE-KMS). This check is a best practice; CIS v3.0.0 does not number it.",
+      "error": ""
+    },
+    {
+      "check_id": "3.1",
+      "title": "At least one CloudTrail trail is logging",
+      "cis_reference": "3.1",
+      "severity": "HIGH",
+      "status": "PASS",
+      "service": "cloudtrail",
+      "resource": "account",
+      "evidence": "logging: local",
+      "remediation": "Create a trail and turn logging on. A trail that exists but is stopped does not pass.",
+      "error": ""
+    },
+    {
+      "check_id": "3.1-multi-region",
+      "title": "A logging CloudTrail trail applies to all regions",
+      "cis_reference": "3.1",
+      "severity": "HIGH",
+      "status": "FAIL",
+      "service": "cloudtrail",
+      "resource": "account",
+      "evidence": "no multi-region trail is logging",
+      "remediation": "Turn on IsMultiRegionTrail for a trail that is logging. A multi-region trail that is stopped does not pass.",
+      "error": ""
+    },
+    {
+      "check_id": "3.2",
+      "title": "CloudTrail log file validation is enabled",
+      "cis_reference": "3.2",
+      "severity": "MEDIUM",
+      "status": "FAIL",
+      "service": "cloudtrail",
+      "resource": "local",
+      "evidence": "LogFileValidationEnabled=false",
+      "remediation": "Enable log file validation on the trail.",
+      "error": ""
+    },
+    {
+      "check_id": "5.2-22",
+      "title": "Security groups do not allow the world to reach TCP 22",
+      "cis_reference": "5.2 / 5.3",
+      "severity": "HIGH",
+      "status": "FAIL",
+      "service": "ec2",
+      "resource": "sg-bd24a8a51e0653aae (ssh-open)",
+      "evidence": "tcp 22 from 0.0.0.0/0",
+      "remediation": "Remove 0.0.0.0/0 and ::/0 from inbound rules that include TCP 22.",
+      "error": ""
+    },
+    {
+      "check_id": "5.2-3389",
+      "title": "Security groups do not allow the world to reach TCP 3389",
+      "cis_reference": "5.2 / 5.3",
+      "severity": "HIGH",
+      "status": "PASS",
+      "service": "ec2",
+      "resource": "us-east-1",
+      "evidence": "no security group exposes tcp/3389 to the world",
+      "remediation": "Remove 0.0.0.0/0 and ::/0 from inbound rules that include TCP 3389.",
+      "error": ""
     }
   ]
 }

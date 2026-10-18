@@ -1,7 +1,39 @@
-"""
-cis_aws_scanner.checks
+"""Built-in checks, grouped by AWS service.
 
-Individual CIS AWS Foundations Benchmark check modules, one per benchmark
-section (IAM, S3, CloudTrail, networking, ...). Each module exposes a
-Checker class with a run_all() method returning list[CheckResult].
+Importing this package registers every check on the shared registry.
+Add a new control by writing a :class:`~cis_aws_scanner.check.Check`
+subclass in the matching service module and decorating it with
+``@registry.register``.
 """
+
+from cis_aws_scanner.checks.cloudtrail import (
+    CloudTrailLoggingCheck,
+    CloudTrailLogValidationCheck,
+    CloudTrailMultiRegionCheck,
+)
+from cis_aws_scanner.checks.ec2 import SecurityGroupRdpCheck, SecurityGroupSshCheck
+from cis_aws_scanner.checks.iam import (
+    AccessKeyAgeCheck,
+    ConsoleMfaCheck,
+    PasswordLengthCheck,
+    PasswordReuseCheck,
+    RootAccessKeyCheck,
+    RootMfaCheck,
+)
+from cis_aws_scanner.checks.s3 import S3DefaultEncryptionCheck, S3PublicAccessBlockCheck
+
+__all__ = [
+    "AccessKeyAgeCheck",
+    "CloudTrailLogValidationCheck",
+    "CloudTrailLoggingCheck",
+    "CloudTrailMultiRegionCheck",
+    "ConsoleMfaCheck",
+    "PasswordLengthCheck",
+    "PasswordReuseCheck",
+    "RootAccessKeyCheck",
+    "RootMfaCheck",
+    "S3DefaultEncryptionCheck",
+    "S3PublicAccessBlockCheck",
+    "SecurityGroupRdpCheck",
+    "SecurityGroupSshCheck",
+]
